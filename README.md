@@ -23,21 +23,15 @@ fi
 chmod 600 .env
 ```
 
-1. [developer.saxo](https://www.developer.saxo/) でアプリを作成する。
-   アプリ詳細に Environment 欄がない場合は、`GrantType: Code`、
-   `AuthorizationEndpoint: https://sim.logonvalidation.net/authorize`、
-   `RedirectURLs: http://localhost` になっていることを確認する。
-   AppKey / AppSecret を `.env` の `SAXO_APP_KEY` / `SAXO_APP_SECRET` に書く
-2. VPS の CLI で `uv run saxokit login` を実行し、表示された URL を手元 PC のブラウザで開く。
-   ログイン後の **Approve Application** 画面で下部の Approve を押し、リダイレクト先の
-   URL (`http://localhost/?code=...&state=...`) を丸ごと VPS の CLI へ貼る。
-   ローカル受信サーバーを使わないため、接続拒否や 404 の画面でも URL は取得できる。
-   このログインに SSH ポート転送は不要
+1. [developer.saxo](https://www.developer.saxo/) で Simulation 用アプリを作成する。
+   Grant type は `Code`、Redirect URL は `http://localhost` にする。
+   AppKey / AppSecret を `.env` の `SAXO_APP_KEY` / `SAXO_APP_SECRET` に設定する
+2. コードを置いた環境で `uv run saxokit login` を実行し、表示された URL をブラウザで開く。
+   ログインして Approve を押し、戻り先の URL (`http://localhost/?code=...&state=...`) 全体を
+   CLI の入力待ちへ貼る。接続エラーが表示されても、URL に code と state があれば使える
 3. `uv run saxokit token` で `OK (sim) UserId=...` が出れば疎通完了
 
-ログイン画面で 400 になったり Approve が表示されなかったりする場合は、同じ認可 URL を別の
-ブラウザで開く。CLI をやり直した場合は `state` も変わるため、古い URL を使わず、新しく表示された
-認可 URL から操作する。
+手元の Linux PC でもサーバーでも実行できる。常時稼働が必要になったら VPS へ置く。
 
 ## 使い方
 
