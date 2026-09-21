@@ -1,0 +1,27 @@
+[project]
+name = "saxokit"
+version = "0.1.0"
+description = "サクソバンク証券 OpenAPI 向け検証・ペーパー運用キット: OAuth 自動更新 / バックテスト / ペーパートレード / 監視ダッシュボード"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "python-dotenv>=1.2.2",
+    "requests>=2.34.2",
+]
+
+[project.scripts]
+saxokit = "saxokit.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+source-include = ["config.toml", "deploy/**", "tests/**", "uv.lock"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

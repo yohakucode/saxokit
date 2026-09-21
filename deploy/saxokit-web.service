@@ -1,0 +1,17 @@
+# saxokit 監視ダッシュボード(読み取り専用・127.0.0.1:8787)
+# 登録(user unit): mkdir -p ~/.config/systemd/user && cp deploy/saxokit-web.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now saxokit-web && loginctl enable-linger $USER
+[Unit]
+Description=saxokit paper-trade dashboard (read-only, 127.0.0.1:8787)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/saxokit
+ExecStart=%h/.local/bin/uv run saxokit web --host 127.0.0.1
+Restart=on-failure
+RestartSec=10
+MemoryMax=250M
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>saxokit モニター</title>
+<style>
+  :root {
+    --bg: #0B1220;
+    --panel: #101A2D;
+    --panel-2: #0D1526;
+    --line: #1F2D47;
+    --line-soft: #16223A;
+    --ink: #D9E2F0;
+    --ink-2: #8B99B3;
+    --ink-3: #5E6C86;
+    --up: #FF6B5E;      /* 朱: 利益(日本の証券慣習) */
+    --down: #4FA3FF;    /* 青: 損失 */
+    --warn: #E5B45B;
+    --chart: #9FB4D8;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --sans: "BIZ UDGothic", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg); }
+  body {
+    font-family: var(--sans); color: var(--ink);
+    font-size: 13px; line-height: 1.5;
+    padding: 0 20px 48px; max-width: 1280px; margin: 0 auto;
+  }
+  :focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
+
+  header {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding: 14px 0 12px; border-bottom: 1px solid var(--line);
+  }
+  .brand { font-family: var(--mono); font-size: 15px; letter-spacing: .12em; font-weight: 600; }
+  .brand small { color: var(--ink-2); font-weight: 400; letter-spacing: .08em; }
+  .hmeta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-2); display: flex; gap: 16px; }
+  #conn.err { color: var(--warn); }
+
+  .banner {
+    display: none; margin-top: 14px; padding: 10px 14px;
+    border: 1px solid var(--warn); background: var(--panel-2); color: var(--warn);
+    font-family: var(--mono); font-size: 12px;
+  }
+
+  .sect { margin-top: 26px; }
+  .sect-head {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+    color: var(--ink-2); text-transform: uppercase;
+  }
+  .sect-head::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .sect-head .jp { font-family: var(--sans); letter-spacing: .1em; color: var(--ink); }
+
+  .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 12px; }
+  .chan {
+    background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+    border: 1px solid var(--line); border-top: 2px solid var(--ink-3);
+  }
+  .chan-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+  }
+  .chan-bar .name { font-weight: 600; }
+  .chip {
+    font-size: 10px; padding: 1px 7px; letter-spacing: .12em;
+    border: 1px solid var(--ink-3); color: var(--ink-2); border-radius: 2px;
+  }
+  .chip.long { border-color: var(--up); color: var(--up); }
+  .chip.warn { border-color: var(--warn); color: var(--warn); }
+  .lamp { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 10px; letter-spacing: .1em; }
+  .lamp .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); animation: pulse 2.4s ease-in-out infinite; }
+  .lamp.stale { color: var(--warn); }
+  .lamp.stale .dot { background: transparent; border: 1px solid var(--warn); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .lamp .dot { animation: none; } }
+  .chan-body { padding: 12px 14px 14px; }
+  .equity { font-family: var(--mono); font-size: 28px; font-weight: 600; letter-spacing: .02em; }
+  .equity-label { font-size: 10px; color: var(--ink-3); letter-spacing: .16em; font-family: var(--mono); }
+  .chan-nums { display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap; }
+  .knum { font-family: var(--mono); font-size: 12px; }
+  .knum .k { display: block; font-size: 9px; color: var(--ink-3); letter-spacing: .14em; }
+  .strats { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .strat { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; }
+  .strat .name { min-width: 110px; font-weight: 600; letter-spacing: .06em; }
+  .strat .knum { margin-left: auto; }
+
+  .tscroll { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); background: var(--panel-2); }
+  table { border-collapse: collapse; width: 100%; white-space: nowrap; }
+  th, td { padding: 7px 12px; text-align: right; font-family: var(--mono); font-size: 12px; }
+  th {
+    font-size: 10px; letter-spacing: .12em; color: var(--ink-3); font-weight: 400;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0;
+  }
+  td { border-bottom: 1px solid var(--line-soft); }
+  tr:last-child td { border-bottom: none; }
+  th.l, td.l { text-align: left; }
+  .pos { color: var(--up); }
+  .neg { color: var(--down); }
+  .dim { color: var(--ink-3); }
+  .empty { padding: 22px 14px; color: var(--ink-3); font-size: 12px; text-align: center; font-family: var(--sans); }
+
+  .agg-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 12px; }
+  .tile { background: var(--panel-2); border: 1px solid var(--line); padding: 10px 12px; }
+  .tile .k { font-size: 9px; color: var(--ink-3); letter-spacing: .16em; font-family: var(--mono); }
+  .tile .v { font-family: var(--mono); font-size: 19px; font-weight: 600; margin-top: 3px; }
+
+  #chartwrap { margin-top: 16px; border: 1px solid var(--line); background: var(--panel-2); position: relative; }
+  #chartwrap svg { display: block; width: 100%; }
+  #tip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--panel); border: 1px solid var(--line); padding: 6px 9px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.6; z-index: 5;
+  }
+
+  #log {
+    margin-top: 12px; border: 1px solid var(--line); background: var(--panel-2);
+    padding: 10px 12px; font-family: var(--mono); font-size: 11px;
+    white-space: pre; overflow-x: auto; max-height: 260px; overflow-y: auto;
+    color: var(--ink-2); line-height: 1.7;
+  }
+  #log .buy { color: var(--up); }
+  #log .sell { color: var(--down); }
+  #log .err { color: var(--warn); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">saxokit <small>▸ ペーパーモニター</small></div>
+  <div class="hmeta">
+    <span id="envchip">–</span>
+    <span id="clock">--:--:-- JST</span>
+    <span id="conn">初回読み込み中…</span>
+  </div>
+</header>
+
+<div id="banner" class="banner"></div>
+
+<section class="sect" aria-label="口座">
+  <div class="sect-head"><span>ACCOUNT</span><span class="jp">口座</span></div>
+  <div class="channels">
+    <div class="chan">
+      <div class="chan-bar"><span class="name">EQUITY</span><span class="chip" id="ccyraw">–</span></div>
+      <div class="chan-body">
+        <span class="equity-label">評価資産(実現 + 含み)</span>
+        <div class="equity" id="eq">–</div>
+        <div class="chan-nums">
+          <span class="knum"><span class="k">含み損益(台帳・概算)</span><span id="unreal">–</span></span>
+          <span class="knum"><span class="k">実現損益(台帳・概算)</span><span id="realized">–</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sect" aria-label="銘柄">
+  <div class="sect-head"><span>INSTRUMENTS</span><span class="jp">運用銘柄</span></div>
+  <div class="channels" id="instruments"></div>
+</section>
+
+<section class="sect" aria-label="決済履歴と集計">
+  <div class="sect-head"><span>TRADES &amp; SUMMARY</span><span class="jp">売買履歴(台帳)・集計</span></div>
+  <div class="agg-tiles" id="agg"></div>
+  <div class="equity-label" style="margin-top:8px">損益は台帳の記録価格と現在の気配から計算した概算です。口座の決済結果は saxokit journal と証券会社の取引報告で照合してください。</div>
+  <div id="chartwrap">
+    <svg id="chart" height="240" role="img" aria-label="評価資産の推移"></svg>
+    <div id="tip"></div>
+  </div>
+  <div class="tscroll" style="max-height:320px;overflow-y:auto"><div id="history"></div></div>
+</section>
+
+<section class="sect" aria-label="実行ログ">
+  <div class="sect-head"><span>LOG</span><span class="jp">実行ログ</span></div>
+  <div id="log">–</div>
+</section>
+
+<script>
+"use strict";
+
+const fmtJpy = new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 0 });
+function yen(v) { return "¥" + fmtJpy.format(v); }
+function pnl(v) {
+  if (v === null || v === undefined) return "<span class='dim'>—</span>";
+  const cls = v > 0 ? "pos" : v < 0 ? "neg" : "dim";
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "±";
+  return `<span class="${cls}">${sign}${fmtJpy.format(Math.abs(v))}</span>`;
+}
+function pctf(v) {
+  if (v === null || v === undefined) return "";
+  const cls = v > 0 ? "pos" : v < 0 ? "neg" : "dim";
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "±";
+  return `<span class="${cls}">${sign}${Math.abs(v).toFixed(2)}%</span>`;
+}
+function price(v) {
+  if (v === null || v === undefined) return "—";
+  return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 3 }).format(v);
+}
+function jstTime(x) {
+  return new Date(x).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+let lastEquity = null;
+
+function render(d) {
+  document.getElementById("envchip").textContent = (d.env || "?").toUpperCase();
+  const banner = document.getElementById("banner");
+  if (d.error) {
+    banner.style.display = "block";
+    const authHelp = /401|SAXO_TOKEN/.test(d.error)
+      ? " — saxokit refresh を実行し、拒否された場合は saxokit login をやり直してください"
+      : "";
+    banner.textContent = "⚠ " + d.error + authHelp;
+  } else banner.style.display = "none";
+
+  document.getElementById("eq").textContent = d.balance == null ? "–" : yen(d.balance);
+  document.getElementById("ccyraw").textContent = d.balance_raw || "–";
+  document.getElementById("unreal").innerHTML = pnl(d.positions?.some(p => p.amount) ? d.unrealized_jpy : null);
+  document.getElementById("realized").innerHTML = pnl(d.stats ? d.stats.realized_jpy : null);
+
+  document.getElementById("instruments").innerHTML = (d.positions || []).map(p => {
+    const lamp = p.market_open
+      ? '<span class="lamp"><span class="dot"></span>稼働中</span>'
+      : '<span class="lamp stale"><span class="dot"></span>休場</span>';
+    const mis = p.ledger_mismatch ? `<span class="chip warn">■ 台帳≠API建玉 ${price(p.amount)}</span>` : "";
+    const rows = (p.strategies || []).map(s => {
+      const chip = !p.market_open ? '<span class="chip">CLOSED</span>'
+        : s.signal === 1 ? '<span class="chip long">LONG</span>' : '<span class="chip">FLAT</span>';
+      const warn = s.mismatch ? '<span class="chip warn">■ 不整合</span>' : "";
+      const held = s.held
+        ? `${price(s.held)} @ ${price(s.entry_price)} ${pnl(s.unreal_jpy)} ${pctf(s.unreal_pct)}`
+        : '<span class="dim">建玉なし</span>';
+      return `<div class="strat"><span class="name">${s.spec}</span>${chip}${warn}<span class="knum">${held}</span></div>`;
+    }).join("");
+    return `
+    <div class="chan">
+      <div class="chan-bar">
+        <span class="name">${p.symbol}</span>${mis}${lamp}
+      </div>
+      <div class="chan-body">
+        <span class="equity-label">現在値</span>
+        <div class="equity">${price(p.price)}</div>
+        <div class="strats">${rows}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  const s = d.stats || {};
+  const perStrat = (d.positions || []).flatMap(p => p.strategies.map(st => ({ ...st, symbol: p.symbol })));
+  document.getElementById("agg").innerHTML = `
+    <div class="tile"><span class="k">実現損益 合計(台帳・概算)</span><div class="v">${pnl(s.n ? s.realized_jpy : null)}</div></div>
+    <div class="tile"><span class="k">決済数</span><div class="v">${s.n ?? 0}</div></div>
+    <div class="tile"><span class="k">勝率</span><div class="v">${s.win_rate == null ? "—" : Math.round(s.win_rate * 100) + "%"}</div></div>` +
+    perStrat.map(st => `<div class="tile"><span class="k">${st.symbol} ${st.spec}</span><div class="v">${pnl(st.n ? st.realized_jpy : null)}</div><span class="k">${st.n} 決済 / ${st.wins} 勝</span></div>`).join("");
+
+  const rows = d.trades || [];
+  document.getElementById("history").innerHTML = rows.length
+    ? `<table><thead><tr><th class="l">時刻(JST)</th><th class="l">銘柄</th><th class="l">戦略</th><th class="l">売買</th><th>数量</th><th>価格</th><th class="l">理由</th></tr></thead><tbody>` +
+      rows.map(r => `<tr>
+          <td class="l dim">${r.ts ? jstTime(r.ts) : "—"}</td>
+          <td class="l">${(r.symbol || "").toUpperCase()}</td>
+          <td class="l">${r.strategy || ""}</td>
+          <td class="l ${r.side === "Buy" ? "pos" : "neg"}">${r.side}</td>
+          <td>${price(parseFloat(r.amount))}</td>
+          <td>${r.price || "—"}</td>
+          <td class="l dim">${(r.reason || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}${r.order_id === "netted" ? "(相殺・発注なし)" : ""}</td>
+        </tr>`).join("") + `</tbody></table>`
+    : `<div class="empty">売買履歴なし — 初回エントリー後に表示されます(戦略とエントリー理由付き)</div>`;
+
+  lastEquity = d.equity || [];
+  drawChart(lastEquity);
+
+  const log = document.getElementById("log");
+  log.innerHTML = (d.log || []).map(l => {
+    const esc = l.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    if (/401|エラー|Error|Traceback|不明|拒否|失敗/.test(l)) return `<span class="err">${esc}</span>`;
+    if (/Buy /.test(l)) return `<span class="buy">${esc}</span>`;
+    if (/Sell /.test(l)) return `<span class="sell">${esc}</span>`;
+    return esc;
+  }).join("\n") || "ログなし(cron 初回実行待ち)";
+  log.scrollTop = log.scrollHeight;
+}
+
+/* ---- 評価資産推移チャート ---- */
+function drawChart(eq) {
+  const svg = document.getElementById("chart");
+  const wrap = document.getElementById("chartwrap");
+  const W = wrap.clientWidth, H = 240;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = "";
+  if (!eq || eq.length < 2) {
+    svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" fill="#5E6C86" font-size="12" text-anchor="middle" font-family="BIZ UDGothic,Meiryo,sans-serif">記録が 2 点以上たまると評価資産の推移を表示します(毎時 1 点)</text>`;
+    return;
+  }
+  const M = { l: 74, r: 20, t: 16, b: 24 };
+  const xs = eq.map(c => c[0]), ys = eq.map(c => c[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const pad = (y1 - y0) * 0.1 || Math.max(y1 * 0.001, 1);
+  y0 -= pad; y1 += pad;
+  const X = t => M.l + (t - x0) / (x1 - x0 || 1) * (W - M.l - M.r);
+  const Y = v => H - M.b - (v - y0) / (y1 - y0) * (H - M.t - M.b);
+  const ns = "http://www.w3.org/2000/svg";
+  const el = (n, at) => { const e = document.createElementNS(ns, n); for (const k in at) e.setAttribute(k, at[k]); svg.appendChild(e); return e; };
+
+  const step = (y1 - y0) / 4;
+  for (let i = 0; i <= 4; i++) {
+    const v = y0 + step * i, y = Y(v);
+    el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y, stroke: "#1F2D47", "stroke-width": 1 });
+    const t = el("text", { x: M.l - 8, y: y + 3, fill: "#5E6C86", "font-size": 10, "text-anchor": "end", "font-family": "Cascadia Mono,Consolas,monospace" });
+    t.textContent = fmtJpy.format(v);
+  }
+  [x0, (x0 + x1) / 2, x1].forEach((t, i) => {
+    const lbl = el("text", { x: X(t), y: H - 7, fill: "#5E6C86", "font-size": 10, "text-anchor": i === 0 ? "start" : i === 2 ? "end" : "middle", "font-family": "Cascadia Mono,Consolas,monospace" });
+    lbl.textContent = new Date(t).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", month: "2-digit", day: "2-digit" });
+  });
+
+  const dpath = eq.map((c, i) => (i ? "L" : "M") + X(xs[i]).toFixed(1) + " " + Y(ys[i]).toFixed(1)).join(" ");
+  el("path", { d: dpath, fill: "none", stroke: "#9FB4D8", "stroke-width": 2, "stroke-linejoin": "round" });
+
+  const start = ys[0], last = ys.length - 1, lv = ys[last];
+  const lc = lv > start ? "#FF6B5E" : lv < start ? "#4FA3FF" : "#8B99B3";
+  el("circle", { cx: X(xs[last]), cy: Y(lv), r: 3.5, fill: lc });
+  const fin = el("text", { x: X(xs[last]), y: Y(lv) - 8, fill: lc, "font-size": 12, "font-weight": 600, "font-family": "Cascadia Mono,Consolas,monospace" });
+  fin.setAttribute("text-anchor", X(xs[last]) > W - 110 ? "end" : "start");
+  fin.textContent = yen(lv);
+
+  const tip = document.getElementById("tip");
+  const cross = el("line", { y1: M.t, y2: H - M.b, stroke: "#5E6C86", "stroke-width": 1, visibility: "hidden" });
+  const cdot = el("circle", { r: 3, fill: "#D9E2F0", visibility: "hidden" });
+  const hit = el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent" });
+  hit.addEventListener("mousemove", ev => {
+    const r = svg.getBoundingClientRect();
+    const mx = (ev.clientX - r.left) * (W / r.width);
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < eq.length; i++) { const dd = Math.abs(X(xs[i]) - mx); if (dd < bd) { bd = dd; best = i; } }
+    cross.setAttribute("x1", X(xs[best])); cross.setAttribute("x2", X(xs[best]));
+    cross.setAttribute("visibility", "visible");
+    cdot.setAttribute("cx", X(xs[best])); cdot.setAttribute("cy", Y(ys[best]));
+    cdot.setAttribute("visibility", "visible");
+    tip.style.display = "block";
+    tip.innerHTML = `${jstTime(xs[best])}<br>${yen(ys[best])}<br><span class="dim">開始比</span> ${pnl(ys[best] - start)}`;
+    const px = X(xs[best]) / W * wrap.clientWidth;
+    tip.style.left = Math.min(px + 12, wrap.clientWidth - tip.offsetWidth - 6) + "px";
+    tip.style.top = "14px";
+  });
+  hit.addEventListener("mouseleave", () => {
+    cross.setAttribute("visibility", "hidden");
+    cdot.setAttribute("visibility", "hidden");
+    tip.style.display = "none";
+  });
+}
+
+function setConn(ok) {
+  const el = document.getElementById("conn");
+  el.textContent = ok ? "最終更新 " + new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo" }) : "接続エラー — 再試行中";
+  el.className = ok ? "" : "err";
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/status");
+    if (!r.ok) throw new Error(r.status);
+    render(await r.json());
+    setConn(true);
+  } catch (e) { setConn(false); }
+}
+
+setInterval(() => {
+  document.getElementById("clock").textContent =
+    new Date().toLocaleTimeString("ja-JP", { timeZone: "Asia/Tokyo", hour12: false }) + " JST";
+}, 1000);
+window.addEventListener("resize", () => { if (lastEquity) drawChart(lastEquity); });
+
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

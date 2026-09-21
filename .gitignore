@@ -1,0 +1,10 @@
+.env
+.env.lock
+# write_env の一時ファイル (.env → ..env.XXXX)
+..env.*
+data/
+*.log
+__pycache__/
+.venv/
+.pytest_cache/
+dist/
