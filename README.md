@@ -6,9 +6,9 @@ FX / CFD のデータ取得・バックテストを行うための最小キッ�
 - **OAuth トークン更新** — 認可コードで取得した access / refresh token を更新して `.env` に保存
 - **バックテスト** — スプレッド・スワップ・レバレッジを設定でき、IS/OOS 70/30 の結果を併記
 - **FX スポットのペーパートレード** — 1 銘柄に複数戦略を同時運用し、差分をネットして成行 1 本。台帳と口座を毎回照合
-- **監視ダッシュボード** — 標準ライブラリだけの読み取り専用 Web UI
+- **監視ダッシュボード** — React + TypeScript + Vite + Tailwind CSS の読み取り専用 Web UI
 
-実行時の依存は `requests` と `python-dotenv` のみ。Python 3.12 以上、Linux を対象とする。
+Python 側の実行時依存は `requests` と `python-dotenv` のみ。Python 3.12 以上、Linux を対象とする。
 トークン更新の排他に `fcntl.flock` を使う。
 
 ## セットアップ
@@ -33,6 +33,19 @@ chmod 600 .env
 
 手元の Linux PC でもサーバーでも実行できる。常時稼働が必要になったら VPS へ置く。
 
+## 監視画面のビルド
+
+clone 後に監視画面を初めて使うときは、[Node.js](https://nodejs.org/en/download) 22.12 以上で frontend をビルドしてから Python の Web サーバーを起動する。
+
+```bash
+npm --prefix dashboard ci
+npm --prefix dashboard run build
+uv run saxokit web              # http://127.0.0.1:8787
+```
+
+Node.js は画面のビルド時だけ必要で、`paper`、`journal`、cron、ビルド済み画面の配信には使わない。`dashboard/` に React / TypeScript のソースがあり、Vite が生成した `src/saxokit/static/` を既存の `saxokit web` が `/api/status` と同じ origin で配信する。
+
+
 ## 使い方
 
 ```bash
@@ -52,6 +65,7 @@ spread_open、旧形式なら前足の終値 spread、それも無ければ設�
 `paper --dry-run` は口座・市場データを読み取って計画を表示し、発注やファイル更新をしない。
 `--symbol` は台帳のキーであり、取引銘柄は `--uic` で指定する。
 Web の対象は `src/saxokit/web.py` の `BOOK` を paper の銘柄・戦略と一致させる。
+画面では評価額推移、建玉、売買履歴、ログを確認でき、テーマ切替と表示の絞り込みも使える。画面は 15 秒ごとに `/api/status` を読み、Python 側は Saxo API の集計結果を 30 秒キャッシュする。表示は取得できた情報の要約であり、bot プロセスの稼働を保証するものではない。
 
 VPS 上のダッシュボードを見る場合は、手元の PC から SSH ポート転送する。
 

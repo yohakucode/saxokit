@@ -1,11 +1,27 @@
-"""認証なしダッシュボードの安全な待受既定を検証する。"""
+"""認証なしダッシュボードの API・静的配信契約を検証する。"""
 
-from pathlib import Path
+from contextlib import contextmanager
+from http.server import ThreadingHTTPServer
+from threading import Thread
 
 import pytest
 import requests
 
 from saxokit import web
+
+
+@contextmanager
+def dashboard_server():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), web.Handler)
+    thread = Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        host, port = server.server_address
+        yield f"http://{host}:{port}"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
 
 
 def test_serve_defaults_to_loopback(monkeypatch):
@@ -119,13 +135,112 @@ def test_external_requests_are_blocked_before_sending():
         requests.get("https://gateway.saxobank.com/sim/openapi/port/v1/users/me")
 
 
-def test_dashboard_labels_estimates_and_routes_error_help():
-    html = (Path(web.__file__).parent / "dashboard.html").read_text(encoding="utf-8")
+def test_dashboard_serves_index_and_hashed_assets_with_queries(tmp_path, monkeypatch):
+    static = tmp_path / "static"
+    assets = static / "assets"
+    assets.mkdir(parents=True)
+    index = "<!doctype html><div id=\"root\"></div>".encode()
+    script = "export const ready = true;".encode()
+    (static / "index.html").write_bytes(index)
+    (assets / "app-a1b2.js").write_bytes(script)
+    monkeypatch.setattr(web, "STATIC_DIR", static)
 
-    assert '<div class="brand">saxokit ' in html
-    assert "台帳・概算" in html
-    assert "saxokit journal" in html
-    assert "証券会社の取引報告" in html
-    assert "照合" in html
-    assert "const authHelp = /401|SAXO_TOKEN/.test(d.error)" in html
-    assert "/401|エラー|Error|Traceback|不明|拒否|失敗/.test(l)" in html
+    with dashboard_server() as base:
+        page = requests.get(f"{base}/?v=20260921")
+        asset = requests.get(f"{base}/assets/app-a1b2.js?v=20260921")
+
+    assert page.status_code == 200
+    assert page.content == index
+    assert page.headers["Content-Type"] == "text/html; charset=utf-8"
+    assert int(page.headers["Content-Length"]) == len(index)
+    assert asset.status_code == 200
+    assert asset.content == script
+    assert asset.headers["Content-Type"] in {
+        "application/javascript; charset=utf-8",
+        "text/javascript; charset=utf-8",
+    }
+    assert int(asset.headers["Content-Length"]) == len(script)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/assets/",
+        "/assets/%2e%2e/index.html",
+        "/assets/%2e%2e/%2e%2e/secret.txt",
+        "/assets/nested/%2e%2e/app.js",
+        "/unknown",
+    ],
+)
+def test_dashboard_rejects_directories_traversal_and_unknown_routes(
+    path, tmp_path, monkeypatch
+):
+    static = tmp_path / "static"
+    (static / "assets" / "nested").mkdir(parents=True)
+    (static / "index.html").write_text("index")
+    (static / "assets" / "app.js").write_text("app")
+    (tmp_path / "secret.txt").write_text("secret")
+    monkeypatch.setattr(web, "STATIC_DIR", static)
+
+    with dashboard_server() as base:
+        response = requests.get(base + path)
+
+    assert response.status_code == 404
+    assert b"secret" not in response.content
+
+
+def test_dashboard_rejects_symlinks_outside_static_root(tmp_path, monkeypatch):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "index.html").write_text("outside index")
+    (outside / "escape.js").write_text("outside asset")
+
+    index_link_root = tmp_path / "index-link-static"
+    index_link_root.mkdir()
+    (index_link_root / "index.html").symlink_to(outside / "index.html")
+    monkeypatch.setattr(web, "STATIC_DIR", index_link_root)
+    with dashboard_server() as base:
+        index_response = requests.get(f"{base}/")
+
+    asset_link_root = tmp_path / "asset-link-static"
+    (asset_link_root / "assets").mkdir(parents=True)
+    (asset_link_root / "index.html").write_text("safe index")
+    (asset_link_root / "assets" / "escape.js").symlink_to(outside / "escape.js")
+    monkeypatch.setattr(web, "STATIC_DIR", asset_link_root)
+    with dashboard_server() as base:
+        asset_response = requests.get(f"{base}/assets/escape.js")
+
+    assets_dir_link_root = tmp_path / "assets-dir-link-static"
+    assets_dir_link_root.mkdir()
+    (assets_dir_link_root / "index.html").write_text("safe index")
+    (assets_dir_link_root / "assets").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(web, "STATIC_DIR", assets_dir_link_root)
+    with dashboard_server() as base:
+        assets_dir_response = requests.get(f"{base}/assets/escape.js")
+
+    assert index_response.status_code == 404
+    assert asset_response.status_code == 404
+    assert assets_dir_response.status_code == 404
+    assert b"outside" not in index_response.content
+    assert b"outside" not in asset_response.content
+    assert b"outside" not in assets_dir_response.content
+
+
+def test_status_api_remains_available_when_dashboard_bundle_is_missing(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(web, "STATIC_DIR", tmp_path / "not-built")
+    monkeypatch.setattr(web, "cached_status", lambda: {"env": "sim", "error": None})
+
+    with dashboard_server() as base:
+        missing = requests.get(f"{base}/?cache=1")
+        status = requests.get(f"{base}/api/status?cache=1")
+        traversal = requests.get(f"{base}/assets/%2e%2e/secret.txt")
+
+    assert missing.status_code == 503
+    assert "Dashboard bundle is missing" in missing.text
+    assert status.status_code == 200
+    assert status.json() == {"env": "sim", "error": None}
+    assert status.headers["Content-Type"] == "application/json; charset=utf-8"
+    assert int(status.headers["Content-Length"]) == len(status.content)
+    assert traversal.status_code == 404

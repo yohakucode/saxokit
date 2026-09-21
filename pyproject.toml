@@ -19,7 +19,29 @@ requires = ["uv_build>=0.9.18,<0.10.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-source-include = ["config.toml", "deploy/**", "tests/**", "uv.lock"]
+source-include = [
+    "config.toml",
+    "dashboard/package.json",
+    "dashboard/package-lock.json",
+    "dashboard/tsconfig*.json",
+    "dashboard/vite.config.ts",
+    "dashboard/index.html",
+    "dashboard/src/**",
+    "dashboard/public/**",
+    "deploy/**",
+    "tests/**",
+    "uv.lock",
+]
+source-exclude = [
+    "/.env",
+    "/.env.*",
+    "/dashboard/.env",
+    "/dashboard/.env.*",
+    "/dashboard/.vite",
+    "/dashboard/dist",
+    "/dashboard/node_modules",
+    "/data",
+]
 
 [dependency-groups]
 dev = [

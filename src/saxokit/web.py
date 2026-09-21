@@ -1,7 +1,7 @@
 """ペーパートレード監視ダッシュボード(読み取り専用・stdlib http.server)。
 
-data/paper_log.txt / data/equity.csv と Saxo API(口座・建玉・現値)を集約して
-dashboard.html に表示する。発注系コードは含まない。
+data/paper_log.txt / data/equity.csv と Saxo API(口座・建玉・現値)を集約し、
+生成済み static/index.html を配信して JSON を渡す。発注系コードは含まない。
 
 起動: uv run saxokit web  →  http://127.0.0.1:8787 (loopback バインド)。
 VPS から見る場合は SSH ポート転送を使う。認証機能は持たない。
@@ -10,9 +10,11 @@ VPS から見る場合は SSH ポート転送を使う。認証機能は持た�
 from __future__ import annotations
 
 import json
+import mimetypes
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from saxokit.cli import history_days
 from saxokit.ledger import read_ledger
@@ -25,6 +27,7 @@ BOOK = [  # cron の paper 引数と手動で揃える(例)
 ]
 HORIZON = 60  # 分
 DATA_DIR = Path("data")
+STATIC_DIR = Path(__file__).parent / "static"
 CACHE_TTL = 30.0  # 秒。ブラウザ複数タブでも Saxo API を叩きすぎない
 
 
@@ -207,21 +210,80 @@ def cached_status() -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    def do_GET(self) -> None:  # noqa: N802 (http.server の規約)
-        if self.path.startswith("/api/status"):
-            body = json.dumps(cached_status()).encode()
-            ctype = "application/json; charset=utf-8"
-        elif self.path == "/":
-            body = (Path(__file__).parent / "dashboard.html").read_bytes()
-            ctype = "text/html; charset=utf-8"
-        else:
-            self.send_error(404)
-            return
+    def _send_bytes(self, body: bytes, content_type: str) -> None:
         self.send_response(200)
-        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _serve_static(self, request_path: str) -> None:
+        static_root = STATIC_DIR.resolve()
+        index = (static_root / "index.html").resolve()
+        try:
+            index.relative_to(static_root)
+        except ValueError:
+            self.send_error(404)
+            return
+        if request_path == "/":
+            target = index
+        elif request_path.startswith("/assets/"):
+            try:
+                decoded = unquote(request_path, errors="strict")
+            except UnicodeError:
+                self.send_error(404)
+                return
+            relative = decoded.removeprefix("/assets/")
+            parts = relative.split("/")
+            if (
+                not relative
+                or "\\" in relative
+                or "\x00" in relative
+                or any(part in ("", ".", "..") for part in parts)
+            ):
+                self.send_error(404)
+                return
+            assets_root = (static_root / "assets").resolve()
+            try:
+                assets_root.relative_to(static_root)
+            except ValueError:
+                self.send_error(404)
+                return
+            target = (assets_root / relative).resolve()
+            try:
+                target.relative_to(assets_root)
+                target.relative_to(static_root)
+            except ValueError:
+                self.send_error(404)
+                return
+        else:
+            self.send_error(404)
+            return
+
+        if not index.is_file():
+            self.send_error(
+                503,
+                "Dashboard bundle is missing; build dashboard/ into src/saxokit/static/",
+            )
+            return
+        if not target.is_file():
+            self.send_error(404)
+            return
+        content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        if content_type.startswith("text/") or content_type in {
+            "application/javascript",
+            "application/json",
+        }:
+            content_type += "; charset=utf-8"
+        self._send_bytes(target.read_bytes(), content_type)
+
+    def do_GET(self) -> None:  # noqa: N802 (http.server の規約)
+        request_path = urlsplit(self.path).path
+        if request_path == "/api/status":
+            body = json.dumps(cached_status()).encode()
+            self._send_bytes(body, "application/json; charset=utf-8")
+        else:
+            self._serve_static(request_path)
 
     def log_message(self, fmt: str, *args) -> None:  # アクセスログは抑制
         pass

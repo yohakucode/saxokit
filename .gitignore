@@ -8,3 +8,8 @@ __pycache__/
 .venv/
 .pytest_cache/
 dist/
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.vite/
+dashboard/.env*
+src/saxokit/static/

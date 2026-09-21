@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@import "@fontsource/azeret-mono/400.css";
+@import "@fontsource/azeret-mono/500.css";
+@import "@fontsource/azeret-mono/600.css";
+
+/*
+  デザイン・トークン
+  配色はページ全体で 1 つ(ライト / ダーク)。既定は端末設定に従い、ヘッダーで切り替える。
+  上段「時価」帯(口座評価・建玉 = 未確定の評価)は地色を一段深くし、下段「記録」帯
+  (資産推移・台帳・ログ = ファイルに残った記録)との境界を同じ配色の中で示す。
+  損益色は日本の証券慣習: 利益 = 朱、損失 = 青。琥珀は注意(エラー・照合差・古いデータ)専用。
+*/
+@theme {
+  /* Azeret Mono は Latin のみ。和文が混ざる箇所は同じ和文サンスに落とす */
+  --font-mono: "Azeret Mono", "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo,
+    "Noto Sans JP", "Noto Sans CJK JP", ui-monospace, monospace;
+  --font-sans: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, "Noto Sans JP",
+    "Noto Sans CJK JP", system-ui, sans-serif;
+}
+
+/* ライト(既定) */
+:root {
+  --bg-deep: #e3e7ec;
+  --bg: #eef0f3;
+  --panel: #ffffff;
+  --panel-2: #f5f6f8;
+  --line: #d7dce2;
+  --line-soft: #e6eaee;
+  --fg: #171c21;
+  --fg-mute: #5f6b78;
+  --fg-dim: #6f7a86;
+  --up: #c93f27;
+  --down: #2a63d0;
+  --warn: #8f6410;
+  --ink-line: #3b4550;
+  color-scheme: light;
+}
+
+/* ダーク */
+:root[data-theme="dark"] {
+  --bg-deep: #0f1316;
+  --bg: #151a1f;
+  --panel: #1b2127;
+  --panel-2: #222930;
+  --line: #2b333b;
+  --line-soft: #232a31;
+  --fg: #e9edf1;
+  --fg-mute: #8c97a3;
+  --fg-dim: #7a8793;
+  --up: #ff6f56;
+  --down: #4f9cf5;
+  --warn: #f2bb4f;
+  --ink-line: #b8c2cc;
+  color-scheme: dark;
+}
+
+/* 時価帯: 地色だけ一段深く。中で --bg を参照する要素(ソリッドチップの文字色など)も帯に合わせる */
+.surface-board {
+  --bg: var(--bg-deep);
+}
+
+/* ユーティリティで上書きできるよう、素の規則はレイヤーに入れる */
+@layer base {
+  html {
+    background: var(--bg);
+  }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--warn);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* 数字は常に等幅・タビュラー */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* テーブル */
+  .tbl {
+    border-collapse: collapse;
+    width: 100%;
+    white-space: nowrap;
+  }
+  .tbl th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel);
+    color: var(--fg-dim);
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-align: right;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tbl td {
+    padding: 7px 12px;
+    text-align: right;
+    vertical-align: top;
+    border-bottom: 1px solid var(--line-soft);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .tbl tr:last-child td {
+    border-bottom: none;
+  }
+  .tbl .l {
+    text-align: left;
+  }
+  .tbl .jp {
+    font-family: var(--font-sans);
+  }
+
+  /* ネイティブ入力とボタンの見た目を面に合わせる */
+  .ctl {
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 5px 9px;
+    height: 30px;
+  }
+  /* 390px 幅の端末で入力時に拡大されないようにする */
+  @media (max-width: 640px) {
+    input.ctl,
+    select.ctl {
+      font-size: 16px;
+      height: 36px;
+    }
+  }
+}
