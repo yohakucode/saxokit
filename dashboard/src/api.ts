@@ -55,6 +55,7 @@ export interface Status {
   positions: Position[];
   log: string[];
   equity: EquityPoint[];
+  equity_issues: string[]; // equity.csv の破損行など。空なら問題なし
   trades: Trade[];
   unrealized_jpy: number | null;
   stats: Stats | null;
@@ -154,6 +155,8 @@ export function normalizeStatus(raw: unknown): Status {
   const positions = requiredList(raw.positions, "positions");
   const trades = requiredList(raw.trades, "trades");
   const equity = requiredList(raw.equity, "equity");
+  // 旧バックエンドとの互換性を保ち、項目がある場合は型を検査する
+  const equityIssues = raw.equity_issues === undefined ? [] : requiredList(raw.equity_issues, "equity_issues");
   const log = requiredList(raw.log, "log");
   const stats = isRec(raw.stats)
     ? { realized_jpy: num(raw.stats.realized_jpy), n: num(raw.stats.n), win_rate: num(raw.stats.win_rate) }
@@ -168,6 +171,7 @@ export function normalizeStatus(raw: unknown): Status {
     positions: positions.map(toPosition),
     log: log.map(text),
     equity: toEquity(equity),
+    equity_issues: equityIssues.map(text),
     trades: trades
       .map(toTrade)
       .filter((t): t is Trade => t !== null),

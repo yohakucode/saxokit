@@ -29,6 +29,7 @@ export default function App() {
           failure={failure}
           slow={slow}
           apiError={Boolean(data?.error)}
+          equityIssue={(data?.equity_issues.length ?? 0) > 0}
           theme={theme}
           onTheme={setTheme}
           onRefresh={refresh}

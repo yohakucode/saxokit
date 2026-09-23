@@ -40,6 +40,7 @@ export function Header({
   failure,
   slow,
   apiError,
+  equityIssue,
   theme,
   onTheme,
   onRefresh,
@@ -51,6 +52,7 @@ export function Header({
   failure: Failure | null;
   slow: boolean;
   apiError: boolean;
+  equityIssue: boolean;
   theme: ThemePref;
   onTheme: (t: ThemePref) => void;
   onRefresh: () => void;
@@ -70,6 +72,7 @@ export function Header({
       <>
         データ更新 {jstClock(dataAt)}
         {apiError && <span className="ml-2 text-(--warn)">API エラーあり</span>}
+        {equityIssue && <span className="ml-2 text-(--warn)">記録破損あり</span>}
       </>
     );
   }
@@ -137,7 +140,7 @@ const Code = ({ children }: { children: ReactNode }) => (
   <code className="num rounded-[4px] border border-(--line) bg-(--panel-2) px-1 text-[11px] text-(--fg)">{children}</code>
 );
 
-/** 取得失敗・API エラー・照合差を画面の最上部にまとめて出す。 */
+/** 取得失敗・API エラー・記録破損・照合差を画面の最上部にまとめて出す。 */
 export function Alerts({
   data,
   failure,
@@ -155,9 +158,10 @@ export function Alerts({
   const signalDiffs = data
     ? data.positions.flatMap((p) => p.strategies.filter((s) => s.mismatch).map((s) => ({ symbol: p.symbol, spec: s.spec })))
     : [];
+  const equityIssues = data ? data.equity_issues : [];
   // 401 / SAXO_TOKEN のときだけ再認証を案内する
   const auth = data?.error ? /401|SAXO_TOKEN/.test(data.error) : false;
-  if (!failure && !slow && !data?.error && ledgerDiffs.length === 0 && signalDiffs.length === 0) return null;
+  if (!failure && !slow && !data?.error && equityIssues.length === 0 && ledgerDiffs.length === 0 && signalDiffs.length === 0) return null;
 
   return (
     <div className="mb-5 grid gap-2.5">
@@ -195,6 +199,22 @@ export function Alerts({
             <p>エラー内容と saxokit の設定、ネットワークを確認してください。次回の取得で自動的に再試行されます。</p>
           )}
           <p>口座評価額・建玉・損益の集計は取得できた分だけを表示します。資産推移・台帳・実行ログはローカルの記録から表示しています。</p>
+        </Alert>
+      )}
+      {data && equityIssues.length > 0 && (
+        <Alert live="alert" tag="記録破損" title="資産推移の記録(equity.csv)に読み込めない内容があります">
+          <ul className="num grid gap-0.5 text-[11px] break-words text-(--fg)">
+            {equityIssues.map((issue, i) => (
+              <li key={`${i}:${issue}`}>{issue}</li>
+            ))}
+          </ul>
+          <p>
+            資産推移は読み込めた <span className="num text-(--fg)">{data.equity.length}</span> 件だけを表示しています。ファイルは変更していません。
+          </p>
+          <p>
+            修復するまで paper は評価額の記録時に停止し、発注へ進みません。<Code>data/equity.csv</Code>{" "}
+            のバックアップを取ってから該当行を修正または削除し、ファイル末尾を改行で終えてください。
+          </p>
         </Alert>
       )}
       {(ledgerDiffs.length > 0 || signalDiffs.length > 0) && (

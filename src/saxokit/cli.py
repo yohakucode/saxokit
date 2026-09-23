@@ -18,6 +18,7 @@ from pathlib import Path
 from saxokit.backtest import run_position_backtest, split_is_oos
 from saxokit.config import load_config
 from saxokit.data import Candle, load_candles_csv, save_candles_csv
+from saxokit.equity import append_equity
 from saxokit.ledger import append_ledger, held_by_strategy, read_ledger
 from saxokit.strategy import strategy_target, trade_reason, warmup
 
@@ -125,30 +126,6 @@ def paper_amount(
     """発注数量 = レバ×口座評価額(JPY)を建値通貨換算して価格で割り、lot 単位に切り捨て。"""
     raw = leverage * total_jpy / jpy_per_quote / price
     return int(raw // lot * lot)
-
-
-def append_equity(path: Path, ts_ms: int, total: float) -> None:
-    """エクイティ履歴を追記(ダッシュボード用)。30 分以内の重複行はスキップ。
-
-    cron は毎時 2 銘柄分 paper を実行するため、そのままだと 1 時間に 2 行入る。
-    """
-    last_ts = 0
-    if path.exists():
-        line = ""
-        with open(path) as f:
-            for line in f:
-                pass
-        head = line.split(",", 1)[0]
-        if head.isdigit():
-            last_ts = int(head)
-    if ts_ms - last_ts < 30 * 60_000:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    new = not path.exists()
-    with open(path, "a") as f:
-        if new:
-            f.write("ts,total_value\n")
-        f.write(f"{ts_ms},{total:.0f}\n")
 
 
 def completed_candles(

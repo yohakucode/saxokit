@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 from saxokit.cli import history_days
+from saxokit.equity import read_equity
 from saxokit.ledger import read_ledger
 from saxokit.strategy import strategy_target
 
@@ -69,20 +70,12 @@ def tail_lines(path: Path, n: int = 60) -> list[str]:
     return path.read_text(encoding="utf-8", errors="replace").splitlines()[-n:]
 
 
-def read_equity(path: Path) -> list[list[float]]:
-    if not path.exists():
-        return []
-    out = []
-    for line in path.read_text().splitlines()[1:]:
-        ts, val = line.split(",", 1)
-        out.append([int(ts), float(val)])
-    return out
-
-
 def build_status() -> dict:
     """Saxo API + ローカルファイルからダッシュボード 1 画面分の JSON を組む。"""
     from saxokit.api import SaxoApi
 
+    # 破損行は除外して有効な記録だけを返し、問題は equity_issues で必ず知らせる(API エラーとは別枠)
+    equity = read_equity(DATA_DIR / "equity.csv")
     out: dict = {
         "now_ms": int(time.time() * 1000),
         "env": None,
@@ -91,7 +84,8 @@ def build_status() -> dict:
         "currency": None,
         "positions": [],
         "log": tail_lines(DATA_DIR / "paper_log.txt"),
-        "equity": read_equity(DATA_DIR / "equity.csv"),
+        "equity": equity.points,
+        "equity_issues": equity.problems,
         "trades": [],
     }
     ledger = read_ledger(DATA_DIR / "trades.csv")
